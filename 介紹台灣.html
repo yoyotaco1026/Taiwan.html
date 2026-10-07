@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full bg-slate-950">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>探索台灣 - 內建地圖與多模態交通行程規劃助手</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet Open-Source Interactive Map CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', '"Noto Sans TC"', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0fdfa',
+              100: '#ccfbf1',
+              400: '#2dd4bf',
+              500: '#14b8a6',
+              600: '#0d9488',
+              700: '#0f766e',
+              900: '#134e4a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-card {
+      background: rgba(30, 41, 59, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    /* Leaflet Dark Theme Overrides */
+    .leaflet-container {
+      background: #020617 !important;
+      font-family: inherit;
+    }
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+      background: #0f172a !important;
+      color: #f8fafc !important;
+      border: 1px solid #334155;
+      border-radius: 12px;
+    }
+    .leaflet-popup-content {
+      margin: 8px 12px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body class="h-full text-slate-100 flex flex-col font-sans antialiased overflow-x-hidden selection:bg-brand-500 selection:text-white">
+
+  <!-- Top App Navigation Header -->
+  <header class="sticky top-0 z-40 glass-panel border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center text-white shadow-lg shadow-brand-500/20">
+        <i class="fa-solid fa-map-location-dot text-lg"></i>
+      </div>
+      <div>
+        <h1 class="text-base font-bold tracking-tight leading-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+          探索台灣 <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 border border-brand-500/30">全內建地圖</span>
+        </h1>
+        <p class="text-[10px] text-slate-400">自主規劃 • 內建各類交通工具路線分析</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button onclick="switchTab('map')" class="px-3 py-1.5 rounded-xl bg-brand-500/20 hover:bg-brand-500/30 border border-brand-500/40 text-brand-400 font-semibold text-xs flex items-center gap-1.5 active:scale-95 transition">
+        <i class="fa-solid fa-map"></i> 路線地圖
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 max-w-2xl w-full mx-auto pb-24 px-3 sm:px-4 pt-3 space-y-3">
+
+    <!-- Mobile Segmented Navigation Tabs -->
+    <div class="grid grid-cols-3 gap-1 p-1 bg-slate-900/90 rounded-2xl border border-slate-800 backdrop-blur-md">
+      <button onclick="switchTab('itinerary')" id="tab-btn-itinerary" class="py-2 text-xs sm:text-sm font-semibold rounded-xl text-brand-400 bg-slate-800 border border-slate-700/80 shadow-sm transition flex items-center justify-center gap-1.5">
+        <i class="fa-solid fa-list-check"></i> 行程規劃
+      </button>
+      <button onclick="switchTab('map')" id="tab-btn-map" class="py-2 text-xs sm:text-sm font-semibold rounded-xl text-slate-400 hover:text-slate-200 transition flex items-center justify-center gap-1.5">
+        <i class="fa-solid fa-route text-emerald-400"></i> 交通地圖
+      </button>
+      <button onclick="switchTab('presets')" id="tab-btn-presets" class="py-2 text-xs sm:text-sm font-semibold rounded-xl text-slate-400 hover:text-slate-200 transition flex items-center justify-center gap-1.5">
+        <i class="fa-solid fa-fire text-amber-400"></i> 熱門方案
+      </button>
+    </div>
+
+    <!-- TAB 1: ITINERARY PLANNER & CUSTOMIZER -->
+    <div id="tab-content-itinerary" class="space-y-3">
+      
+      <!-- Summary Metrics Bar -->
+      <div class="glass-card rounded-2xl p-3 border border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="text-center px-2.5 py-1 bg-slate-950/80 rounded-xl border border-slate-800">
+            <div id="spot-count" class="text-base font-extrabold text-brand-400">0</div>
+            <div class="text-[9px] text-slate-400">景點數</div>
+          </div>
+          <div>
+            <h2 id="current-route-title" class="text-xs sm:text-sm font-bold text-slate-100">客製化玩台行程</h2>
+            <div class="flex items-center gap-3 mt-0.5 text-[11px] text-slate-400">
+              <span id="total-travel-est"><i class="fa-regular fa-clock"></i> 移動 0 分</span>
+              <span id="total-cost-est" class="text-amber-400 font-medium"><i class="fa-solid fa-coins"></i> 預估交通 NT$ 0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1.5">
+          <button onclick="openAddSpotModal()" class="px-2.5 py-1.5 bg-brand-500/20 hover:bg-brand-500/30 text-brand-400 border border-brand-500/30 rounded-xl active:scale-95 transition text-xs font-semibold flex items-center gap-1">
+            <i class="fa-solid fa-plus"></i> 加景點
+          </button>
+          <button onclick="confirmClearAll()" class="p-1.5 bg-slate-900 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-slate-800 rounded-xl active:scale-95 transition text-xs" title="清空行程">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Dynamic Itinerary List -->
+      <div id="itinerary-list-container" class="space-y-3">
+        <!-- JS Dynamic Rendering -->
+      </div>
+    </div>
+
+    <!-- TAB 2: INTERACTIVE IN-APP MAP & ROUTE CANVAS -->
+    <div id="tab-content-map" class="hidden space-y-3">
+      <div class="glass-card rounded-2xl p-3 border border-slate-800 flex items-center justify-between">
+        <div>
+          <h3 class="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+            <i class="fa-solid fa-compass text-brand-400"></i> 全島即時路線地圖
+          </h3>
+          <p class="text-[10px] text-slate-400">點擊景點地標可查看名稱與預估停留時間</p>
+        </div>
+        <button onclick="reFitMapBounds()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium">
+          <i class="fa-solid fa-expand"></i> 縮放全景
+        </button>
+      </div>
+
+      <!-- Leaflet Map Canvas Container -->
+      <div class="relative w-full h-[380px] sm:h-[450px] rounded-2xl overflow-hidden border border-slate-800 shadow-2xl">
+        <div id="leaflet-map-canvas" class="w-full h-full z-10"></div>
+      </div>
+
+      <!-- In-Map Route Segment Leg Selector -->
+      <div class="glass-card rounded-2xl p-3 border border-slate-800 space-y-2">
+        <h4 class="text-xs font-bold text-slate-300 flex items-center justify-between">
+          <span><i class="fa-solid fa-list-ol text-brand-400 mr-1"></i> 分段交通速覽</span>
+          <span class="text-[10px] text-slate-400">點擊評估各交通工具</span>
+        </h4>
+        <div id="map-legs-selector" class="space-y-1.5 max-h-[160px] overflow-y-auto no-scrollbar">
+          <!-- JS Dynamic Legs -->
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: PRESET PACKAGES & AI TRAVEL ASSISTANT -->
+    <div id="tab-content-presets" class="hidden space-y-4">
+      
+      <!-- Preset Schemes Section -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between px-1">
+          <h3 class="text-xs font-bold text-slate-300">KKday / Klook 熱門路線方案</h3>
+          <span class="text-[10px] text-slate-400">點擊「套用」即刻發起規劃</span>
+        </div>
+        <div class="grid grid-cols-1 gap-3" id="presets-grid">
+          <!-- JS Preset Cards -->
+        </div>
+      </div>
+
+      <!-- AI Interactive Travel Assistant -->
+      <div class="glass-card rounded-2xl p-3.5 border border-purple-500/30 bg-gradient-to-b from-purple-950/30 to-slate-900/80 space-y-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center justify-center">
+            <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+          </div>
+          <div>
+            <h4 class="text-xs font-bold text-white">智慧景點推薦助手</h4>
+            <p class="text-[10px] text-slate-400">輸入想去的地點或風格（夜市、溫泉、文青、親子）</p>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-1.5">
+          <button onclick="askAIAssistant('台北人氣夜市巡禮')" class="px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[11px] text-slate-300 hover:text-purple-300 transition">
+            🌙 台北夜市
+          </button>
+          <button onclick="askAIAssistant('北投/礁溪溫泉名湯')" class="px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[11px] text-slate-300 hover:text-purple-300 transition">
+            ♨️ 溫泉秘境
+          </button>
+          <button onclick="askAIAssistant('適合全家出遊的親子景點')" class="px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[11px] text-slate-300 hover:text-purple-300 transition">
+            👶 親子同遊
+          </button>
+          <button onclick="askAIAssistant('台中文青藝術景點')" class="px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[11px] text-slate-300 hover:text-purple-300 transition">
+            🎨 文青打卡
+          </button>
+        </div>
+
+        <div id="ai-output-box" class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800 min-h-[110px] text-xs text-slate-300 space-y-2">
+          <p class="text-slate-500 italic text-center py-4">👉 在下方輸入地點或點選上方主題，AI 助手將給出推薦並可直接加入行程！</p>
+        </div>
+
+        <div class="flex gap-1.5">
+          <input type="text" id="ai-query-input" placeholder="輸入你想去的城市或特色..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500">
+          <button onclick="handleAISubmit()" class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl text-xs shadow transition active:scale-95">
+            詢問
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Floating Bottom Navigation Quick Bar -->
+  <div class="fixed bottom-0 left-0 right-0 z-40 p-2.5 glass-panel border-t border-slate-800/80">
+    <div class="max-w-2xl mx-auto flex items-center justify-between gap-2">
+      <button onclick="switchTab('map')" class="flex-1 py-2.5 bg-gradient-to-r from-brand-600 to-emerald-500 hover:from-brand-500 hover:to-emerald-400 text-slate-950 rounded-xl font-extrabold text-xs shadow-lg shadow-brand-600/20 flex items-center justify-center gap-1.5 active:scale-95 transition">
+        <i class="fa-solid fa-map-location-dot"></i>
+        <span>查看內建交通總地圖</span>
+      </button>
+      <button onclick="openAddSpotModal()" class="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-medium text-xs border border-slate-700 flex items-center justify-center gap-1 active:scale-95 transition">
+        <i class="fa-solid fa-plus text-brand-400"></i>
+        <span>手動加點</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL: Transport Option Breakdown & Step-by-Step Modal -->
+  <div id="transport-modal" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-200">
+      <div class="p-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg bg-brand-500/20 text-brand-400 flex items-center justify-center">
+            <i class="fa-solid fa-route text-xs"></i>
+          </div>
+          <div>
+            <h3 class="text-xs sm:text-sm font-bold text-white" id="modal-route-title">景點 A ➔ 景點 B 交通評估</h3>
+            <p class="text-[10px] text-slate-400">內建各類交通工具時間、車資與乘車步驟</p>
+          </div>
+        </div>
+        <button onclick="closeTransportModal()" class="p-1 text-slate-400 hover:text-white rounded-lg">
+          <i class="fa-solid fa-xmark text-base"></i>
+        </button>
+      </div>
+
+      <div class="p-3.5 space-y-3 max-h-[70vh] overflow-y-auto no-scrollbar" id="modal-transport-options">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <div class="p-3 bg-slate-950 border-t border-slate-800 flex gap-2">
+        <button onclick="closeTransportModal()" class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl transition">
+          關閉交通評估窗口
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Add Custom Spot Modal -->
+  <div id="add-spot-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-4 space-y-3 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+        <h3 class="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+          <i class="fa-solid fa-location-dot text-brand-400"></i> 新增自訂景點
+        </h3>
+        <button onclick="closeAddSpotModal()" class="text-slate-400 hover:text-white">
+          <i class="fa-solid fa-xmark text-base"></i>
+        </button>
+      </div>
+
+      <div class="space-y-2.5">
+        <div>
+          <label class="block text-[11px] font-medium text-slate-400 mb-1">景點名稱 *</label>
+          <input type="text" id="custom-name" placeholder="例如：士林夜市 或 華山文創園區" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500">
+        </div>
+        <div>
+          <label class="block text-[11px] font-medium text-slate-400 mb-1">簡短介紹 / 特色備註</label>
+          <input type="text" id="custom-desc" placeholder="例如：必吃胡椒餅、生蚵煎" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500">
+        </div>
+        <div>
+          <label class="block text-[11px] font-medium text-slate-400 mb-1">彩色圖片網址 (可留空，自動分配預設圖)</label>
+          <input type="text" id="custom-img" placeholder="https://..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[11px] font-medium text-slate-400 mb-1">區域</label>
+            <select id="custom-region" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none">
+              <option value="北部">北部</option>
+              <option value="中部">中部</option>
+              <option value="南部">南部</option>
+              <option value="東部">東部</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-400 mb-1">停留時間 (分鐘)</label>
+            <input type="number" id="custom-duration" value="90" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none">
+          </div>
+        </div>
+      </div>
+
+      <div class="flex gap-2 pt-1">
+        <button onclick="closeAddSpotModal()" class="flex-1 py-1.5 bg-slate-800 text-slate-300 text-xs font-medium rounded-xl">取消</button>
+        <button onclick="submitCustomSpot()" class="flex-1 py-1.5 bg-brand-500 hover:bg-brand-400 text-slate-950 font-bold text-xs rounded-xl">確定新增</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ==========================================================================
+       TAIWAN SPOTS DATABASE WITH GEOGRAPHIC COORDINATES
+       ========================================================================== */
+    const TAIWAN_SPOTS_DB = [
+      {
+        id: 'tpe101',
+        name: '台北101觀景台',
+        region: '北部',
+        city: '台北市',
+        lat: 25.033976,
+        lng: 121.564538,
+        desc: '俯瞰台北盆地絕美夜景與地標建築，搭乘超高速電梯。',
+        img: 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=600&auto=format&fit=crop&q=80',
+        stayMins: 90
+      },
+      {
+        id: 'jiufen',
+        name: '九份老街',
+        region: '北部',
+        city: '新北市',
+        lat: 25.109882,
+        lng: 121.845209,
+        desc: '經典山城茶樓風情，品嚐阿柑姨芋圓與阿妹茶樓美景。',
+        img: 'https://images.unsplash.com/photo-1508248467071-046d6cc406a8?w=600&auto=format&fit=crop&q=80',
+        stayMins: 120
+      },
+      {
+        id: 'shifen',
+        name: '十分老街天燈',
+        region: '北部',
+        city: '新北市',
+        lat: 25.043329,
+        lng: 121.776682,
+        desc: '沿著鐵道旁寫下祝福天燈，體驗傳統祈福文化。',
+        img: 'https://images.unsplash.com/photo-1516483638261-f4dbaf036963?w=600&auto=format&fit=crop&q=80',
+        stayMins: 90
+      },
+      {
+        id: 'yehliu',
+        name: '野柳地質公園',
+        region: '北部',
+        city: '新北市',
+        lat: 25.206389,
+        lng: 121.690556,
+        desc: '大自然的鬼斧神工，欣賞女王頭與燭台石地貌。',
+        img: 'https://images.unsplash.com/photo-1571474004502-c1def214ac6d?w=600&auto=format&fit=crop&q=80',
+        stayMins: 90
+      },
+      {
+        id: 'shilin',
+        name: '士林夜市',
+        region: '北部',
+        city: '台北市',
+        lat: 25.087948,
+        lng: 121.524108,
+        desc: '台北最大國際觀光夜市，必嚐豪大大雞排與生炒花枝。',
+        img: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80',
+        stayMins: 120
+      },
+      {
+        id: 'sml',
+        name: '日月潭國家風景區',
+        region: '中部',
+        city: '南投縣',
+        lat: 23.851676,
+        lng: 120.916016,
+        desc: '搭乘環湖遊艇與纜車，盡情享受湖光山色美景。',
+        img: 'https://images.unsplash.com/photo-1609780447631-05b93e5a88ea?w=600&auto=format&fit=crop&q=80',
+        stayMins: 180
+      },
+      {
+        id: 'alishan',
+        name: '阿里山國家森林公園',
+        region: '中部',
+        city: '嘉義縣',
+        lat: 23.510000,
+        lng: 120.803889,
+        desc: '復古森林小火車、神木群步道與日出雲海奇觀。',
+        img: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?w=600&auto=format&fit=crop&q=80',
+        stayMins: 240
+      },
+      {
+        id: 'rainbow',
+        name: '台中彩虹眷村',
+        region: '中部',
+        city: '台中市',
+        lat: 24.133608,
+        lng: 120.609806,
+        desc: '彩虹爺爺手繪繽紛童話塗鴉眷村，人氣打卡景點。',
+        img: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=600&auto=format&fit=crop&q=80',
+        stayMins: 60
+      },
+      {
+        id: 'chimei',
+        name: '台南奇美博物館',
+        region: '南部',
+        city: '台南市',
+        lat: 22.934812,
+        lng: 120.226082,
+        desc: '西洋藝術與自然史博物館，凡爾賽宮風格希臘神話庭園。',
+        img: 'https://images.unsplash.com/photo-1596178065887-1198b6148b2b?w=600&auto=format&fit=crop&q=80',
+        stayMins: 150
+      },
+      {
+        id: 'taroko',
+        name: '太魯閣國家公園',
+        region: '東部',
+        city: '花蓮縣',
+        lat: 24.158528,
+        lng: 121.622111,
+        desc: '壯麗大理石峽谷與立霧溪奇景，燕子口與九曲洞步道。',
+        img: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600&auto=format&fit=crop&q=80',
+        stayMins: 200
+      },
+      {
+        id: 'qixing',
+        name: '清水斷崖 & 七星潭',
+        region: '東部',
+        city: '花蓮縣',
+        lat: 24.032500,
+        lng: 121.632222,
+        desc: '太平洋絕壁海景與美麗的新月形鵝卵石海岸。',
+        img: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&auto=format&fit=crop&q=80',
+        stayMins: 90
+      }
+    ];
+
+    /* ==========================================================================
+       PRESET SCHEMES (KKday / Klook Style)
+       ========================================================================== */
+    const PRESET_PACKAGES = [
+      {
+        id: 'pkg-north',
+        tag: 'KKday 熱門首選',
+        tagColor: 'from-amber-500 to-orange-500',
+        title: '方案 A：北台灣經典山海人文線',
+        subtitle: '野柳地質公園 ➔ 十分天燈 ➔ 九份老街 ➔ 台北101觀景台',
+        spots: ['yehliu', 'shifen', 'jiufen', 'tpe101']
+      },
+      {
+        id: 'pkg-central-south',
+        tag: 'Klook 深度推薦',
+        tagColor: 'from-emerald-500 to-teal-500',
+        title: '方案 B：中南部湖光山色古都巡禮',
+        subtitle: '彩虹眷村 ➔ 日月潭纜車與遊湖 ➔ 阿里山小火車 ➔ 奇美博物館',
+        spots: ['rainbow', 'sml', 'alishan', 'chimei']
+      },
+      {
+        id: 'pkg-east',
+        tag: '戶外秘境',
+        tagColor: 'from-blue-500 to-indigo-500',
+        title: '方案 C：花東太平洋海岸壯麗巡禮',
+        subtitle: '太魯閣峽谷 ➔ 清水斷崖 & 七星潭',
+        spots: ['taroko', 'qixing']
+      }
+    ];
+
+    /* ==========================================================================
+       GLOBAL STATE & LEAFLET MAP INSTANCE
+       ========================================================================== */
+    let currentItinerary = [];
+    let leafletMap = null;
+    let mapMarkersGroup = null;
+    let mapPolylineGroup = null;
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initLeafletMap();
+      loadPresetRoute('pkg-north');
+      renderPresetsTab();
+    });
+
+    /* ==========================================================================
+       TAB CONTROLLER
+       ========================================================================== */
+    function switchTab(tabName) {
+      const tabs = ['itinerary', 'map', 'presets'];
+      tabs.forEach(t => {
+        const content = document.getElementById(`tab-content-${t}`);
+        const btn = document.getElementById(`tab-btn-${t}`);
+        if (t === tabName) {
+          content.classList.remove('hidden');
+          btn.classList.add('text-brand-400', 'bg-slate-800', 'border', 'border-slate-700/80', 'shadow-sm');
+          btn.classList.remove('text-slate-400');
+        } else {
+          content.classList.add('hidden');
+          btn.classList.remove('text-brand-400', 'bg-slate-800', 'border', 'border-slate-700/80', 'shadow-sm');
+          btn.classList.add('text-slate-400');
+        }
+      });
+
+      if (tabName === 'map' && leafletMap) {
+        setTimeout(() => {
+          leafletMap.invalidateSize();
+          reFitMapBounds();
+        }, 150);
+      }
+    }
+
+    /* ==========================================================================
+       LEAFLET MAP INITIALIZATION & RENDERER (NO GOOGLE MAPS REDIRECT)
+       ========================================================================== */
+    function initLeafletMap() {
+      // Center on Taiwan
+      leafletMap = L.map('leaflet-map-canvas', {
+        zoomControl: false
+      }).setView([23.8, 120.9], 7);
+
+      // Dark Mode OpenStreetMap / CartoDB Dark Matter tiles
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO',
+        maxZoom: 18
+      }).addTo(leafletMap);
+
+      L.control.zoom({ position: 'topright' }).addTo(leafletMap);
+
+      mapMarkersGroup = L.layerGroup().addTo(leafletMap);
+      mapPolylineGroup = L.layerGroup().addTo(leafletMap);
+    }
+
+    function renderMapRoutes() {
+      if (!leafletMap || !mapMarkersGroup) return;
+
+      mapMarkersGroup.clearLayers();
+      mapPolylineGroup.clearLayers();
+
+      if (currentItinerary.length === 0) return;
+
+      const latLngs = [];
+
+      currentItinerary.forEach((spot, idx) => {
+        const pos = [spot.lat, spot.lng];
+        latLngs.push(pos);
+
+        // Custom HTML Marker Icon
+        const customIcon = L.divIcon({
+          className: 'custom-map-pin',
+          html: `
+            <div class="w-7 h-7 rounded-full bg-slate-900 border-2 border-brand-400 text-brand-400 font-extrabold text-xs flex items-center justify-center shadow-lg transform -translate-x-1/2 -translate-y-1/2">
+              ${idx + 1}
+            </div>
+          `,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14]
+        });
+
+        const marker = L.marker(pos, { icon: customIcon })
+          .bindPopup(`
+            <div class="font-sans">
+              <strong class="text-brand-400 text-xs">${idx + 1}. ${spot.name}</strong>
+              <p class="text-[11px] text-slate-300 mt-1">${spot.desc}</p>
+              <div class="text-[10px] text-slate-400 mt-1">建議停留: ${spot.stayMins || 90} 分鐘</div>
+            </div>
+          `);
+
+        mapMarkersGroup.addLayer(marker);
+      });
+
+      // Draw Polyline path
+      if (latLngs.length > 1) {
+        const polyline = L.polyline(latLngs, {
+          color: '#14b8a6',
+          weight: 4,
+          opacity: 0.85,
+          dashArray: '8, 8'
+        });
+        mapPolylineGroup.addLayer(polyline);
+      }
+
+      reFitMapBounds();
+      renderMapLegSelector();
+    }
+
+    function reFitMapBounds() {
+      if (currentItinerary.length === 0 || !leafletMap) return;
+      const bounds = L.latLngBounds(currentItinerary.map(s => [s.lat, s.lng]));
+      leafletMap.fitBounds(bounds, { padding: [35, 35] });
+    }
+
+    function renderMapLegSelector() {
+      const container = document.getElementById('map-legs-selector');
+      if (currentItinerary.length < 2) {
+        container.innerHTML = `<div class="text-xs text-slate-500 italic">請加入至少 2 個景點以顯示分段交通路線</div>`;
+        return;
+      }
+
+      let html = '';
+      for (let i = 0; i < currentItinerary.length - 1; i++) {
+        const spotA = currentItinerary[i];
+        const spotB = currentItinerary[i + 1];
+        const transportInfo = evaluateTransportModes(spotA, spotB);
+        const topMode = transportInfo.modes[0];
+
+        html += `
+          <div onclick="openTransportModal(${i})" class="p-2 bg-slate-950/80 hover:bg-slate-800 rounded-xl border border-slate-800 flex items-center justify-between text-xs cursor-pointer transition">
+            <div class="flex items-center gap-2 overflow-hidden">
+              <span class="w-5 h-5 rounded-full bg-slate-800 text-brand-400 font-bold text-[10px] flex items-center justify-center shrink-0">${i + 1}</span>
+              <span class="text-slate-200 font-semibold truncate text-[11px]">${spotA.name} ➔ ${spotB.name}</span>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0 text-[10px]">
+              <i class="${topMode.icon}"></i>
+              <span class="text-brand-400 font-bold">${topMode.timeMinutes}分</span>
+              <span class="text-slate-400">NT$ ${topMode.costNTD}</span>
+            </div>
+          </div>
+        `;
+      }
+      container.innerHTML = html;
+    }
+
+    /* ==========================================================================
+       MULTI-MODAL TRANSPORTATION CALCULATOR ENGINE
+       ========================================================================== */
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+
+    function evaluateTransportModes(spotA, spotB) {
+      const dist = calculateDistance(spotA.lat, spotA.lng, spotB.lat, spotB.lng);
+      const modes = [];
+
+      // 1. High Speed Rail (THSR) / TRA Express
+      if (dist > 50) {
+        modes.push({
+          id: 'thsr',
+          name: '高鐵 THSR / 台鐵特快',
+          icon: 'fa-solid fa-train-subway text-blue-400',
+          timeMinutes: Math.round(dist * 0.45 + 30),
+          costNTD: Math.round(dist * 2.8 + 90),
+          badge: '⚡ 極速省時',
+          badgeClass: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+          recommendReason: '長途跨縣市移動首選，班次密集且避開國道塞車。',
+          steps: [
+            `從 ${spotA.name} 搭乘接駁或計程車至附近高鐵/火車站 (約 15 分鐘)`,
+            `搭乘高鐵/特快列車前往目的地縣市 (約 ${Math.round(dist * 0.45)} 分鐘)`,
+            `抵達車站後轉乘計程車或公車至 ${spotB.name} (約 15 分鐘)`
+          ]
+        });
+      }
+
+      // 2. Metro MRT / Local Transit
+      if (dist <= 35) {
+        modes.push({
+          id: 'mrt',
+          name: '捷運 MRT / 市區公車',
+          icon: 'fa-solid fa-train text-emerald-400',
+          timeMinutes: Math.round(dist * 2.5 + 10),
+          costNTD: Math.round(Math.min(65, dist * 2.2 + 20)),
+          badge: '💰 最平價經濟',
+          badgeClass: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+          recommendReason: '都會區交通最划算選擇，不受路面紅綠燈與塞車影響。',
+          steps: [
+            `從 ${spotA.name} 步行至最近捷運/公車站 (約 5 分鐘)`,
+            `搭乘捷運/公車線路至目標站點 (約 ${Math.round(dist * 2.5)} 分鐘)`,
+            `出站步行直達 ${spotB.name} (約 5 分鐘)`
+          ]
+        });
+      }
+
+      // 3. Charter Car / Taxi
+      modes.push({
+        id: 'taxi',
+        name: '包車 / 計程車直達',
+        icon: 'fa-solid fa-taxi text-amber-400',
+        timeMinutes: Math.round(dist * 1.2 + 10),
+        costNTD: Math.round(dist * 18 + 100),
+        badge: '🚘 舒適直達',
+        badgeClass: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+        recommendReason: '適合多人同行分擔車資，無需搬運行李轉乘。',
+        steps: [
+          `在 ${spotA.name} 上車點預約包車/計程車`,
+          `經由快速道路/國道直達 ${spotB.name} (約 ${Math.round(dist * 1.2 + 10)} 分鐘)`
+        ]
+      });
+
+      // 4. Tourist Bus / Taiwan Tourist Shuttle
+      modes.push({
+        id: 'bus',
+        name: '台灣好行 / 觀光巴士',
+        icon: 'fa-solid fa-bus text-purple-400',
+        timeMinutes: Math.round(dist * 1.8 + 15),
+        costNTD: Math.round(dist * 1.8 + 25),
+        badge: '🚌 觀光專線',
+        badgeClass: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+        recommendReason: '專為台灣熱門景點規劃之觀光公車，一線直達景點門口。',
+        steps: [
+          `至觀光巴士指定站牌候車 (約 10 分鐘)`,
+          `搭乘台灣好行專線到達 ${spotB.name} 站牌 (約 ${Math.round(dist * 1.8)} 分鐘)`
+        ]
+      });
+
+      // 5. Walking / YouBike
+      if (dist <= 4) {
+        modes.push({
+          id: 'walk',
+          name: '步行 / YouBike 共享單車',
+          icon: 'fa-solid fa-person-walking text-teal-400',
+          timeMinutes: Math.round(dist * 13),
+          costNTD: Math.round(dist * 8),
+          badge: '🌱 慢活體驗',
+          badgeClass: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
+          recommendReason: '距離近，騎乘 YouBike 或漫步體驗台灣巷弄風光。',
+          steps: [
+            `在 ${spotA.name} 附近租借 YouBike 共享單車`,
+            `沿自行車道/步行街騎行至 ${spotB.name} 歸還 (約 ${Math.round(dist * 13)} 分鐘)`
+          ]
+        });
+      }
+
+      modes.sort((a, b) => a.timeMinutes - b.timeMinutes);
+      return { distKm: dist.toFixed(1), modes };
+    }
+
+    /* ==========================================================================
+       RENDER ITINERARY & TRANSIT LEGS
+       ========================================================================== */
+    function renderItinerary() {
+      const container = document.getElementById('itinerary-list-container');
+      const spotCountEl = document.getElementById('spot-count');
+      const totalEstEl = document.getElementById('total-travel-est');
+      const totalCostEl = document.getElementById('total-cost-est');
+
+      spotCountEl.innerText = currentItinerary.length;
+
+      if (currentItinerary.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-10 px-4 glass-card rounded-2xl border border-dashed border-slate-800 space-y-2">
+            <div class="w-10 h-10 mx-auto rounded-full bg-slate-900 text-slate-500 flex items-center justify-center text-lg">
+              <i class="fa-solid fa-map-location-dot"></i>
+            </div>
+            <p class="text-xs font-semibold text-slate-300">行程清單目前是空的</p>
+            <p class="text-[10px] text-slate-500">點擊「熱門方案」選擇或點擊「加景點」自訂</p>
+            <button onclick="switchTab('presets')" class="px-3 py-1.5 bg-brand-500/20 text-brand-400 rounded-xl text-xs font-semibold border border-brand-500/30">
+              載入經典方案
+            </button>
+          </div>
+        `;
+        totalEstEl.innerHTML = `<i class="fa-regular fa-clock"></i> 移動 0 分`;
+        totalCostEl.innerHTML = `<i class="fa-solid fa-coins"></i> 預估交通 NT$ 0`;
+        renderMapRoutes();
+        return;
+      }
+
+      let totalMinutes = 0;
+      let totalCost = 0;
+      let html = '';
+
+      currentItinerary.forEach((spot, idx) => {
+        html += `
+          <div class="glass-card rounded-2xl p-3 border border-slate-800 relative group hover:border-slate-700 transition">
+            <div class="flex items-center gap-2.5">
+              <div class="w-6 h-6 rounded-lg bg-slate-900 border border-slate-700 text-brand-400 font-extrabold text-xs flex items-center justify-center shrink-0">
+                ${idx + 1}
+              </div>
+
+              <img src="${spot.img}" class="w-16 h-16 rounded-xl object-cover shrink-0 bg-slate-900 border border-slate-800" alt="${spot.name}" onerror="this.src='https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=300'">
+
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-slate-900 text-slate-400 border border-slate-800">
+                    ${spot.region || '台灣'}
+                  </span>
+                  <h3 class="text-xs font-bold text-white truncate">${spot.name}</h3>
+                </div>
+                <p class="text-[10px] text-slate-400 mt-0.5 line-clamp-1">${spot.desc}</p>
+                <div class="text-[10px] text-brand-400/80 mt-1 flex items-center gap-1">
+                  <i class="fa-regular fa-hourglass-half text-[9px]"></i> 預計停留 ${spot.stayMins || 90} 分鐘
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-1 shrink-0">
+                ${idx > 0 ? `<button onclick="moveSpot(${idx}, -1)" class="p-1 text-slate-400 hover:text-brand-400 text-[10px] rounded bg-slate-900" title="上移"><i class="fa-solid fa-chevron-up"></i></button>` : ''}
+                ${idx < currentItinerary.length - 1 ? `<button onclick="moveSpot(${idx}, 1)" class="p-1 text-slate-400 hover:text-brand-400 text-[10px] rounded bg-slate-900" title="下移"><i class="fa-solid fa-chevron-down"></i></button>` : ''}
+                <button onclick="removeSpot(${idx})" class="p-1 text-slate-400 hover:text-red-400 text-[10px] rounded bg-slate-900" title="刪除"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+            </div>
+          </div>
+        `;
+
+        if (idx < currentItinerary.length - 1) {
+          const nextSpot = currentItinerary[idx + 1];
+          const transportInfo = evaluateTransportModes(spot, nextSpot);
+          const topMode = transportInfo.modes[0];
+
+          totalMinutes += topMode.timeMinutes;
+          totalCost += topMode.costNTD;
+
+          html += `
+            <div onclick="openTransportModal(${idx})" class="my-1 px-3 py-2 bg-slate-950/70 hover:bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-between text-xs gap-2 cursor-pointer transition">
+              <div class="flex items-center gap-2 overflow-hidden">
+                <div class="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse shrink-0"></div>
+                <div class="truncate">
+                  <span class="text-slate-400 text-[10px]">前往下一站 <span class="text-brand-400 font-bold">${transportInfo.distKm} km</span></span>
+                  <div class="flex items-center gap-1.5 mt-0.5">
+                    <i class="${topMode.icon} text-xs"></i>
+                    <span class="font-bold text-slate-200 text-[11px]">${topMode.name} (${topMode.timeMinutes}分)</span>
+                    <span class="text-[9px] px-1.5 py-0.2 rounded border ${topMode.badgeClass}">${topMode.badge}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-1 shrink-0 text-brand-400 text-[11px] font-semibold">
+                <span>詳細步驟</span>
+                <i class="fa-solid fa-chevron-right text-[9px]"></i>
+              </div>
+            </div>
+          `;
+        }
+      });
+
+      container.innerHTML = html;
+      totalEstEl.innerHTML = `<i class="fa-regular fa-clock"></i> 移動 ${totalMinutes} 分`;
+      totalCostEl.innerHTML = `<i class="fa-solid fa-coins"></i> 預估交通 NT$ ${totalCost}`;
+
+      renderMapRoutes();
+    }
+
+    /* ==========================================================================
+       TRANSPORT MODAL BREAKDOWN
+       ========================================================================== */
+    function openTransportModal(idx) {
+      const spotA = currentItinerary[idx];
+      const spotB = currentItinerary[idx + 1];
+      if (!spotA || !spotB) return;
+
+      document.getElementById('modal-route-title').innerText = `${spotA.name} ➔ ${spotB.name}`;
+      
+      const { distKm, modes } = evaluateTransportModes(spotA, spotB);
+      const container = document.getElementById('modal-transport-options');
+
+      container.innerHTML = modes.map((m, mIdx) => `
+        <div class="p-3 bg-slate-950 rounded-xl border ${mIdx === 0 ? 'border-brand-500/40 bg-brand-950/10' : 'border-slate-800'} space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i class="${m.icon} text-sm"></i>
+              <span class="font-bold text-white text-xs">${m.name}</span>
+            </div>
+            <span class="text-[9px] font-bold px-2 py-0.5 rounded-full border ${m.badgeClass}">${m.badge}</span>
+          </div>
+
+          <div class="flex items-center justify-between text-xs text-slate-300">
+            <span>⏱️ 時間: <strong class="text-brand-400">${m.timeMinutes} 分鐘</strong></span>
+            <span>💰 車資: <strong class="text-amber-400">NT$ ${m.costNTD}</strong></span>
+          </div>
+
+          <p class="text-[10px] text-slate-400 bg-slate-900/80 p-2 rounded-lg leading-relaxed">
+            💡 ${m.recommendReason}
+          </p>
+
+          <div class="border-t border-slate-800/80 pt-2 space-y-1">
+            <span class="text-[10px] font-bold text-slate-400">搭乘步驟細節：</span>
+            ${m.steps.map((step, sIdx) => `
+              <div class="flex items-start gap-1.5 text-[10px] text-slate-300">
+                <span class="w-3.5 h-3.5 rounded-full bg-slate-800 text-brand-400 font-bold flex items-center justify-center shrink-0 text-[8px] mt-0.5">${sIdx + 1}</span>
+                <span>${step}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('');
+
+      document.getElementById('transport-modal').classList.remove('hidden');
+    }
+
+    function closeTransportModal() {
+      document.getElementById('transport-modal').classList.add('hidden');
+    }
+
+    /* ==========================================================================
+       ITINERARY MODIFICATIONS
+       ========================================================================== */
+    function moveSpot(index, direction) {
+      const newIndex = index + direction;
+      if (newIndex >= 0 && newIndex < currentItinerary.length) {
+        const temp = currentItinerary[index];
+        currentItinerary[index] = currentItinerary[newIndex];
+        currentItinerary[newIndex] = temp;
+        renderItinerary();
+      }
+    }
+
+    function removeSpot(index) {
+      currentItinerary.splice(index, 1);
+      renderItinerary();
+    }
+
+    function confirmClearAll() {
+      if (currentItinerary.length === 0) return;
+      currentItinerary = [];
+      renderItinerary();
+    }
+
+    function loadPresetRoute(pkgId) {
+      const pkg = PRESET_PACKAGES.find(p => p.id === pkgId);
+      if (!pkg) return;
+
+      currentItinerary = pkg.spots.map(spotId => {
+        const spot = TAIWAN_SPOTS_DB.find(s => s.id === spotId);
+        return { ...spot };
+      });
+
+      document.getElementById('current-route-title').innerText = pkg.title;
+      renderItinerary();
+      switchTab('itinerary');
+    }
+
+    /* ==========================================================================
+       RENDER PRESET TAB
+       ========================================================================== */
+    function renderPresetsTab() {
+      const container = document.getElementById('presets-grid');
+      container.innerHTML = PRESET_PACKAGES.map(pkg => `
+        <div class="glass-card rounded-2xl p-3 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-gradient-to-r ${pkg.tagColor} text-white">
+              ${pkg.tag}
+            </span>
+            <span class="text-[10px] text-slate-400"><i class="fa-solid fa-location-dot text-brand-400"></i> ${pkg.spots.length} 個景點</span>
+          </div>
+
+          <div>
+            <h4 class="text-xs font-bold text-white">${pkg.title}</h4>
+            <p class="text-[10px] text-slate-400 mt-0.5">${pkg.subtitle}</p>
+          </div>
+
+          <div class="grid grid-cols-4 gap-1 pt-0.5">
+            ${pkg.spots.map(sId => {
+              const spot = TAIWAN_SPOTS_DB.find(s => s.id === sId);
+              return `<img src="${spot.img}" class="w-full h-11 rounded-lg object-cover bg-slate-900" alt="${spot.name}">`;
+            }).join('')}
+          </div>
+
+          <button onclick="loadPresetRoute('${pkg.id}')" class="w-full py-1.5 bg-brand-500 hover:bg-brand-400 text-slate-950 font-bold text-xs rounded-xl transition shadow flex items-center justify-center gap-1">
+            <i class="fa-solid fa-circle-check"></i> 套用此熱門方案
+          </button>
+        </div>
+      `).join('');
+    }
+
+    /* ==========================================================================
+       AI ASSISTANT
+       ========================================================================== */
+    function askAIAssistant(promptText) {
+      document.getElementById('ai-query-input').value = promptText;
+      handleAISubmit();
+    }
+
+    function handleAISubmit() {
+      const input = document.getElementById('ai-query-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const outputBox = document.getElementById('ai-output-box');
+      
+      let matchedSpot = TAIWAN_SPOTS_DB.find(s => text.includes(s.name) || text.includes(s.region) || text.includes(s.city));
+      if (!matchedSpot) {
+        matchedSpot = TAIWAN_SPOTS_DB[Math.floor(Math.random() * TAIWAN_SPOTS_DB.length)];
+      }
+
+      outputBox.innerHTML = `
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-1.5 text-purple-400 font-bold text-xs">
+            <i class="fa-solid fa-sparkles"></i> AI 特選建議：
+          </div>
+          <div class="p-2 bg-slate-900 rounded-xl border border-purple-500/30 space-y-1.5">
+            <div class="flex items-center gap-2">
+              <img src="${matchedSpot.img}" class="w-10 h-10 rounded-lg object-cover" alt="${matchedSpot.name}">
+              <div>
+                <h5 class="font-bold text-white text-xs">${matchedSpot.name} (${matchedSpot.city})</h5>
+                <p class="text-[10px] text-slate-400 line-clamp-1">${matchedSpot.desc}</p>
+              </div>
+            </div>
+            <button onclick="addSpotToItinerary('${matchedSpot.id}')" class="w-full py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-[11px] font-semibold transition">
+              + 將「${matchedSpot.name}」加入行程
+            </button>
+          </div>
+        </div>
+      `;
+
+      input.value = '';
+    }
+
+    function addSpotToItinerary(spotId) {
+      const spot = TAIWAN_SPOTS_DB.find(s => s.id === spotId);
+      if (spot) {
+        currentItinerary.push({ ...spot });
+        renderItinerary();
+        switchTab('itinerary');
+      }
+    }
+
+    /* ==========================================================================
+       CUSTOM SPOT MODAL
+       ========================================================================== */
+    function openAddSpotModal() {
+      document.getElementById('add-spot-modal').classList.remove('hidden');
+    }
+
+    function closeAddSpotModal() {
+      document.getElementById('add-spot-modal').classList.add('hidden');
+    }
+
+    function submitCustomSpot() {
+      const name = document.getElementById('custom-name').value.trim();
+      const desc = document.getElementById('custom-desc').value.trim();
+      const img = document.getElementById('custom-img').value.trim();
+      const region = document.getElementById('custom-region').value;
+      const stayMins = parseInt(document.getElementById('custom-duration').value) || 90;
+
+      if (!name) {
+        alert('請輸入景點名稱！');
+        return;
+      }
+
+      const newSpot = {
+        id: 'custom-' + Date.now(),
+        name: name,
+        region: region,
+        city: '自訂地點',
+        lat: 25.033976 + (Math.random() - 0.5) * 0.2,
+        lng: 121.564538 + (Math.random() - 0.5) * 0.2,
+        desc: desc || '手動新增的私房特色景點',
+        img: img || 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=600&auto=format&fit=crop&q=80',
+        stayMins: stayMins
+      };
+
+      currentItinerary.push(newSpot);
+      renderItinerary();
+      closeAddSpotModal();
+      switchTab('itinerary');
+
+      document.getElementById('custom-name').value = '';
+      document.getElementById('custom-desc').value = '';
+      document.getElementById('custom-img').value = '';
+    }
+  </script>
+</body>
+</html>
